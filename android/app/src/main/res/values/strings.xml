@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ahorra</string>
+    <string name="facebook_app_id">2064125334167556</string>
+    <string name="fb_login_protocol_scheme">fb2064125334167556</string>
+    <string name="facebook_client_token">43efe8e3abf042c30e0fd7deb89fc503</string>
+</resources>

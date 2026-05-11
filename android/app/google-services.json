@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "901776408095",
+    "project_id": "ahorra-budget-companion",
+    "storage_bucket": "ahorra-budget-companion.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:901776408095:android:c0d088e14c773c2c3d5f2a",
+        "android_client_info": {
+          "package_name": "com.example.ahorra"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "901776408095-gvmek45v9nrteh5setgn02c82c417eb5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.ahorra",
+            "certificate_hash": "0698155ec368eb4bbc96c99716f17b3c5f828fa6"
+          }
+        },
+        {
+          "client_id": "901776408095-6pnt9g08g81m0v0bn1l3vl3cnunbdtep.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDE68W7FL8vbxQEL78IQnFltqH7LFIwJRk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "901776408095-6pnt9g08g81m0v0bn1l3vl3cnunbdtep.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "901776408095-fsefgo2mll97dbmi09rfp2h12knhtfpq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.ahorra"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Fast Launch",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--no-sound-null-safety"
+            ]
+        },
+        {
+            "name": "Skip Build Check",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--no-build-snapshot"
+            ]
+        }
+    ]
+}
