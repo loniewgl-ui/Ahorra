@@ -164,7 +164,7 @@ class TestDataGenerator {
       case 'Healthcare':
         return _healthcareItems[_random.nextInt(_healthcareItems.length)];
       default:
-        return '${category} expense';
+        return '$category expense';
     }
   }
 

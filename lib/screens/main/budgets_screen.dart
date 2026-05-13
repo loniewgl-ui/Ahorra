@@ -2,13 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../utils/ahorra_colors.dart';
-import '../widgets/ahorra_widgets.dart';
-import '../utils/app_data.dart';
-import '../models/models.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../widgets/ahorra_widgets.dart';
+import '../../utils/app_data.dart';
+import '../../utils/categories.dart';
+import '../../models/models.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
-import '../widgets/quick_add_modal.dart' show kCategories;
+import '../../widgets/main_nav.dart';
 
 class BudgetsScreen extends StatefulWidget {
   const BudgetsScreen({super.key});
@@ -19,16 +20,48 @@ class BudgetsScreen extends StatefulWidget {
 
 class _BudgetsScreenState extends State<BudgetsScreen> {
   BudgetPeriod _selectedPeriod = BudgetPeriod.monthly;
+  int _selectedMonth = DateTime.now().month;
+  int _selectedYear = DateTime.now().year;
+
+  void _previousMonth() {
+    setState(() {
+      if (_selectedMonth == 1) {
+        _selectedMonth = 12;
+        _selectedYear--;
+      } else {
+        _selectedMonth--;
+      }
+    });
+  }
+
+  void _nextMonth() {
+    final now = DateTime.now();
+    final next = DateTime(_selectedYear, _selectedMonth + 1);
+    if (next.isAfter(DateTime(now.year, now.month + 1))) return;
+    setState(() {
+      if (_selectedMonth == 12) {
+        _selectedMonth = 1;
+        _selectedYear++;
+      } else {
+        _selectedMonth++;
+      }
+    });
+  }
 
   void _openAddBudget() async {
+    final appData = context.read<AppData>();
     final Budget? result = await showModalBottomSheet<Budget>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddBudgetModal(defaultPeriod: _selectedPeriod),
+      builder: (_) => AddBudgetModal(
+        defaultPeriod: _selectedPeriod,
+        defaultMonth: _selectedMonth,
+        defaultYear: _selectedYear,
+      ),
     );
-    if (result != null && context.mounted) {
-      context.read<AppData>().addBudget(result);
+    if (result != null) {
+      appData.addBudget(result);
     }
   }
 
@@ -63,40 +96,50 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     final data = context.watch<AppData>();
     final media = MediaQuery.of(context);
     final topInset = media.padding.top;
-    final filtered =
-        data.budgets.where((b) => b.period == _selectedPeriod).toList();
+    final filtered = data.budgets.where((b) {
+      if (b.period != _selectedPeriod) return false;
+      return b.month == _selectedMonth && b.year == _selectedYear;
+    }).toList();
     final double totalSpent =
         filtered.fold(0.0, (s, b) => s + data.spentForBudget(b));
     final double totalLimit = filtered.fold(0.0, (s, b) => s + b.limit);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F0),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            _BudgetsHeader(
-              topInset: topInset,
-              totalSpent: totalSpent,
-              totalLimit: totalLimit,
-              budgetCount: filtered.length,
-              selectedPeriod: _selectedPeriod,
-              onPeriodChanged: (p) => setState(() => _selectedPeriod = p),
-              onAddBudget: _openAddBudget,
-            ),
-            Expanded(
-              child: filtered.isEmpty
-                  ? _EmptyBudgets(
-                      period: _selectedPeriod, onAddBudget: _openAddBudget)
-                  : _BudgetList(
-                      budgets: filtered,
-                      data: data,
-                      onDeleteBudget: _deleteBudget,
-                    ),
-            ),
-          ],
-        ),
+      body: Column(
+        children: [
+          _BudgetsHeader(
+            topInset: topInset,
+            totalSpent: totalSpent,
+            totalLimit: totalLimit,
+            budgetCount: filtered.length,
+            selectedPeriod: _selectedPeriod,
+            selectedMonth: _selectedMonth,
+            selectedYear: _selectedYear,
+            onPeriodChanged: (p) => setState(() => _selectedPeriod = p),
+            onPreviousMonth: _previousMonth,
+            onNextMonth: _nextMonth,
+            onAddBudget: _openAddBudget,
+            onBack: () {
+              final nav = MainNav.of(context);
+              if (nav != null) {
+                nav.switchToTab(0);
+              } else if (Navigator.of(context).canPop()) {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          Expanded(
+            child: filtered.isEmpty
+                ? _EmptyBudgets(
+                    period: _selectedPeriod, onAddBudget: _openAddBudget)
+                : _BudgetList(
+                    budgets: filtered,
+                    data: data,
+                    onDeleteBudget: _deleteBudget,
+                  ),
+          ),
+        ],
       ),
       floatingActionButton: data.budgets.isNotEmpty
           ? FloatingActionButton(
@@ -119,8 +162,13 @@ class _BudgetsHeader extends StatelessWidget {
   final double totalLimit;
   final int budgetCount;
   final BudgetPeriod selectedPeriod;
+  final int selectedMonth;
+  final int selectedYear;
   final ValueChanged<BudgetPeriod> onPeriodChanged;
+  final VoidCallback onPreviousMonth;
+  final VoidCallback onNextMonth;
   final VoidCallback onAddBudget;
+  final VoidCallback onBack;
 
   const _BudgetsHeader({
     required this.topInset,
@@ -128,14 +176,23 @@ class _BudgetsHeader extends StatelessWidget {
     required this.totalLimit,
     required this.budgetCount,
     required this.selectedPeriod,
+    required this.selectedMonth,
+    required this.selectedYear,
     required this.onPeriodChanged,
+    required this.onPreviousMonth,
+    required this.onNextMonth,
     required this.onAddBudget,
+    required this.onBack,
   });
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final hPad = size.width * 0.05;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
     final double pct =
         totalLimit > 0 ? (totalSpent / totalLimit).clamp(0.0, 1.0) : 0.0;
 
@@ -158,11 +215,21 @@ class _BudgetsHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Budgets',
-                  style: TextStyle(
-                      color: AhorraColors.textWhite,
-                      fontSize: size.width * 0.06,
-                      fontWeight: FontWeight.w700)),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: onBack,
+                    child: Icon(Icons.arrow_back,
+                        color: AhorraColors.textWhite, size: size.width * 0.065),
+                  ),
+                  SizedBox(width: size.width * 0.025),
+                  Text('Budgets',
+                      style: TextStyle(
+                          color: AhorraColors.textWhite,
+                          fontSize: size.width * 0.06,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
               Row(
                 children: [
                   GestureDetector(
@@ -184,13 +251,41 @@ class _BudgetsHeader extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: size.height * 0.018),
+          SizedBox(height: size.height * 0.012),
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: onPreviousMonth,
+                  child: Icon(Icons.chevron_left,
+                      color: AhorraColors.textLight, size: size.width * 0.06),
+                ),
+                SizedBox(width: size.width * 0.04),
+                Text(
+                  '${months[selectedMonth - 1]} $selectedYear',
+                  style: TextStyle(
+                    color: AhorraColors.textWhite,
+                    fontSize: size.width * 0.045,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(width: size.width * 0.04),
+                GestureDetector(
+                  onTap: onNextMonth,
+                  child: Icon(Icons.chevron_right,
+                      color: AhorraColors.textLight, size: size.width * 0.06),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: size.height * 0.012),
           Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(
                 horizontal: size.width * 0.04, vertical: size.height * 0.015),
             decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16)),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,7 +381,7 @@ class _PeriodToggle extends StatelessWidget {
     return Container(
       height: w * 0.09,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -444,7 +539,7 @@ class _BudgetCard extends StatelessWidget {
                 child: Container(
                   padding: EdgeInsets.all(w * 0.02),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -544,7 +639,14 @@ class _EmptyBudgets extends StatelessWidget {
 
 class AddBudgetModal extends StatefulWidget {
   final BudgetPeriod defaultPeriod;
-  const AddBudgetModal({super.key, required this.defaultPeriod});
+  final int defaultMonth;
+  final int defaultYear;
+  const AddBudgetModal({
+    super.key,
+    required this.defaultPeriod,
+    this.defaultMonth = 1,
+    this.defaultYear = 2026,
+  });
 
   @override
   State<AddBudgetModal> createState() => _AddBudgetModalState();
@@ -553,6 +655,8 @@ class AddBudgetModal extends StatefulWidget {
 class _AddBudgetModalState extends State<AddBudgetModal> {
   final TextEditingController _limitCtrl = TextEditingController();
   late BudgetPeriod _period;
+  late int _month;
+  late int _year;
   String? _selectedCategory;
   bool _categoryOpen = false;
 
@@ -560,6 +664,8 @@ class _AddBudgetModalState extends State<AddBudgetModal> {
   void initState() {
     super.initState();
     _period = widget.defaultPeriod;
+    _month = widget.defaultMonth;
+    _year = widget.defaultYear;
   }
 
   @override
@@ -579,7 +685,13 @@ class _AddBudgetModalState extends State<AddBudgetModal> {
       return;
     }
     Navigator.of(context).pop(
-      Budget(category: _selectedCategory!, limit: limit, period: _period),
+      Budget(
+        category: _selectedCategory!,
+        limit: limit,
+        period: _period,
+        month: _month,
+        year: _year,
+      ),
     );
   }
 
@@ -758,7 +870,7 @@ class _CategoryDropdown extends StatelessWidget {
                           horizontal: w * 0.04, vertical: w * 0.038),
                       decoration: BoxDecoration(
                         color: selected == cat
-                            ? Colors.white.withOpacity(0.08)
+                            ? Colors.white.withValues(alpha: 0.08)
                             : Colors.transparent,
                         border: const Border(
                             top:

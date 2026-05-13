@@ -1,8 +1,8 @@
 // lib/screens/splash_screen.dart
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import '../utils/ahorra_colors.dart';
-import '../main.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../main.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -116,13 +116,13 @@ class _SplashScreenState extends State<SplashScreen>
                                   width: size.width * 0.22,
                                   height: size.width * 0.22,
                                   decoration: BoxDecoration(
-                                    color: AhorraColors.teal.withOpacity(0.3),
+                                    color: AhorraColors.teal.withValues(alpha: 0.3),
                                     borderRadius: BorderRadius.circular(
                                         size.width * 0.06),
                                     boxShadow: [
                                       BoxShadow(
                                         color:
-                                            AhorraColors.teal.withOpacity(0.35),
+                                            AhorraColors.teal.withValues(alpha: 0.35),
                                         blurRadius: 16,
                                         offset: const Offset(0, 6),
                                       ),
@@ -158,7 +158,7 @@ class _SplashScreenState extends State<SplashScreen>
                           Text(
                             'Your personal finance companion',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.55),
+                              color: Colors.white.withValues(alpha: 0.55),
                               fontSize: size.width * 0.034,
                               letterSpacing: 0.4,
                               fontWeight: FontWeight.w400,
@@ -172,7 +172,7 @@ class _SplashScreenState extends State<SplashScreen>
                             width: size.width * 0.25,
                             height: 3,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
+                              color: Colors.white.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             clipBehavior: Clip.antiAlias,
@@ -293,7 +293,7 @@ class _ParticlePainter extends CustomPainter {
       final textStyle = TextStyle(
         fontSize: p.size,
         fontWeight: FontWeight.w300,
-        color: Colors.white.withOpacity(p.opacity),
+        color: Colors.white.withValues(alpha: p.opacity),
       );
       final tp = TextPainter(
         text: TextSpan(text: p.symbol, style: textStyle),
@@ -304,7 +304,7 @@ class _ParticlePainter extends CustomPainter {
 
     // Subtle chart line
     final chartPaint = Paint()
-      ..color = Colors.white.withOpacity(0.06)
+      ..color = Colors.white.withValues(alpha: 0.06)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
@@ -331,7 +331,7 @@ class _PulsingGlowPainter extends CustomPainter {
     final glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          AhorraColors.teal.withOpacity(0.25),
+          AhorraColors.teal.withValues(alpha: 0.25),
           Colors.transparent,
         ],
       ).createShader(Rect.fromCircle(center: center, radius: radius));

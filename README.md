@@ -1,1 +1,0 @@
-Ahorra Budget Companion Application

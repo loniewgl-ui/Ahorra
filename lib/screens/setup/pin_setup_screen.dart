@@ -4,8 +4,9 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../utils/ahorra_colors.dart';
-import '../widgets/main_nav.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../widgets/main_nav.dart';
 
 class PinSetupScreen extends StatefulWidget {
   const PinSetupScreen({super.key});
@@ -42,6 +43,15 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
       final uid = FirebaseAuth.instance.currentUser!.uid;
       final hashed = _hashPin(pin);
       await prefs.setString('pin_$uid', hashed);
+
+      // Save to Firestore so PIN persists across devices
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .set({'pinHash': hashed}, SetOptions(merge: true));
+      } catch (_) {}
+
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const MainNav()),
@@ -83,7 +93,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                     width: size.width * 0.2,
                     height: size.width * 0.2,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(size.width * 0.05),
                     ),
                     child: const Icon(
@@ -130,7 +140,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -199,7 +209,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                       backgroundColor: AhorraColors.teal,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor:
-                          AhorraColors.teal.withOpacity(0.6),
+                          AhorraColors.teal.withValues(alpha: 0.6),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),

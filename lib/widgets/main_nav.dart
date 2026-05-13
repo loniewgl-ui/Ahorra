@@ -1,21 +1,29 @@
 // lib/main_nav.dart
 import 'package:flutter/material.dart';
 import '../utils/ahorra_colors.dart';
-import '../screens/analytics_screen.dart';
-import '../screens/budgets_screen.dart';
-import '../screens/home_screen.dart';
-import '../screens/transactions_screen.dart';
-import '../screens/wallets_screen.dart';
+import '../screens/main/analytics_screen.dart';
+import '../screens/main/budgets_screen.dart';
+import '../screens/main/home_screen.dart';
+import '../screens/main/transactions_screen.dart';
+import '../screens/main/wallets_screen.dart';
 
 class MainNav extends StatefulWidget {
   const MainNav({super.key});
 
+  static MainNavState? of(BuildContext context) {
+    return context.findAncestorStateOfType<MainNavState>();
+  }
+
   @override
-  State<MainNav> createState() => _MainNavState();
+  State<MainNav> createState() => MainNavState();
 }
 
-class _MainNavState extends State<MainNav> {
+class MainNavState extends State<MainNav> {
   int _currentIndex = 0;
+
+  void switchToTab(int index) {
+    setState(() => _currentIndex = index);
+  }
 
   late final List<Widget> _screens = [
     const HomeScreen(),

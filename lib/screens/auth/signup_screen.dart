@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../utils/ahorra_colors.dart';
-import '../utils/app_data.dart';
-import '../widgets/ahorra_widgets.dart';
-import 'terms_screen.dart';
-import '../widgets/main_nav.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../utils/app_data.dart';
+import '../../widgets/ahorra_widgets.dart';
+import '../setup/terms_screen.dart';
+import '../setup/pin_setup_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -23,6 +23,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+
+  bool get _hasTrailingSpace =>
+      _passwordController.text.isNotEmpty &&
+      _passwordController.text.endsWith(' ');
+  bool get _passwordsMatch =>
+      _passwordController.text == _confirmPasswordController.text &&
+      _confirmPasswordController.text.isNotEmpty;
 
   @override
   void initState() {
@@ -56,11 +63,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool get _canSubmit {
     return _acceptedTerms &&
         _firstNameController.text.trim().isNotEmpty &&
-        _lastNameController.text.trim().isNotEmpty &&
         _emailController.text.trim().isNotEmpty &&
-        _passwordController.text.isNotEmpty &&
+        _passwordController.text.trim().isNotEmpty &&
         _confirmPasswordController.text.isNotEmpty &&
-        _passwordController.text == _confirmPasswordController.text;
+        _passwordsMatch &&
+        !_hasTrailingSpace;
   }
 
   Future<void> _submit(BuildContext context) async {
@@ -72,7 +79,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
       return;
     }
-    if (_passwordController.text != _confirmPasswordController.text) {
+    if (_hasTrailingSpace) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please remove trailing spaces from your password.')),
+      );
+      return;
+    }
+    if (!_passwordsMatch) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Passwords do not match.')),
       );
@@ -106,23 +120,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
         'photoUrl': '',
       });
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       final appData = context.read<AppData>();
       await appData.load();
-      if (!mounted) return;
+      if (!context.mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainNav()),
+        MaterialPageRoute(builder: (_) => const PinSetupScreen()),
         (route) => false,
       );
     } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       final message =
           e.message ?? 'Failed to create account. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}')),
       );
@@ -194,7 +208,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 controller: _firstNameController,
               ),
               SizedBox(height: size.height * 0.018),
-              const AhorraFormLabel('Last Name'),
+              const AhorraFormLabel('Last Name (Optional)'),
               AhorraInputField(
                 hint: 'Enter last name',
                 controller: _lastNameController,
@@ -220,6 +234,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 obscure: true,
                 controller: _confirmPasswordController,
               ),
+              if (_hasTrailingSpace)
+                Padding(
+                  padding: EdgeInsets.only(top: size.height * 0.006),
+                  child: Text(
+                    'Password has a trailing space',
+                    style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontSize: size.width * 0.03,
+                    ),
+                  ),
+                ),
+              if (!_passwordsMatch && _confirmPasswordController.text.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(top: size.height * 0.006),
+                  child: Text(
+                    'Passwords do not match',
+                    style: TextStyle(
+                      color: Colors.red.shade600,
+                      fontSize: size.width * 0.03,
+                    ),
+                  ),
+                ),
               SizedBox(height: size.height * 0.025),
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,

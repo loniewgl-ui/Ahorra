@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -7,10 +8,10 @@ class AuthHelper {
   /// Validate that Google Sign-In is properly configured
   static Future<bool> validateGoogleSignIn() async {
     try {
-      print('✅ Firebase app initialized');
+      debugPrint('✅ Firebase app initialized');
       return true;
     } catch (e) {
-      print('❌ Firebase validation error: $e');
+      debugPrint('❌ Firebase validation error: $e');
       return false;
     }
   }
@@ -22,11 +23,11 @@ class AuthHelper {
 
       // Skip Firestore test if no user is logged in — no anonymous fallback
       if (user == null) {
-        print('ℹ️ No authenticated user — skipping Firestore validation');
+        debugPrint('ℹ️ No authenticated user — skipping Firestore validation');
         return true;
       }
 
-      print('✅ Already signed in as: ${user.email ?? user.uid}');
+      debugPrint('✅ Already signed in as: ${user.email ?? user.uid}');
 
       final doc = await FirebaseFirestore.instance
           .collection('_test')
@@ -34,17 +35,17 @@ class AuthHelper {
           .get();
 
       if (doc.exists) {
-        print('✅ Firestore is accessible - document exists');
+        debugPrint('✅ Firestore is accessible - document exists');
       } else {
-        print(
+        debugPrint(
             '✅ Firestore is accessible - document does not exist (read allowed)');
       }
       return true;
     } on FirebaseException catch (e) {
-      print('❌ Firestore error: ${e.code} - ${e.message}');
+      debugPrint('❌ Firestore error: ${e.code} - ${e.message}');
       return false;
     } catch (e) {
-      print('❌ Firestore validation error: $e');
+      debugPrint('❌ Firestore validation error: $e');
       return false;
     }
   }
@@ -65,9 +66,9 @@ Facebook Sign-In configured: true
 
   /// Print initialization status
   static Future<void> printInitStatus() async {
-    print('\n' + getDebugInfo());
+    debugPrint('\n${getDebugInfo()}');
     await validateGoogleSignIn();
     await validateFirestore();
-    print('Initialization check complete\n');
+    debugPrint('Initialization check complete\n');
   }
 }

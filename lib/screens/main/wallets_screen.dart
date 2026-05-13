@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../utils/ahorra_colors.dart';
-import '../utils/app_data.dart';
-import '../models/models.dart';
-import '../widgets/add_wallet_modal.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../utils/app_data.dart';
+import '../../models/models.dart';
+import '../../widgets/add_wallet_modal.dart';
+import '../../widgets/main_nav.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
 
@@ -61,40 +62,38 @@ class WalletsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F0),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            _WalletsHeader(
-              topInset: topInset,
-              totalBalance: data.totalNetWorth,
-              walletCount: data.wallets.length,
-              onAddWallet: () => _openAddWallet(context),
-            ),
-            Expanded(
-              child: data.wallets.isEmpty
-                  ? _EmptyWallets()
-                  : ListView(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: hPad, vertical: size.height * 0.02),
-                      children: [
-                        Text('Wallets',
-                            style: TextStyle(
-                                fontSize: size.width * 0.048,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF1A1A1A))),
-                        SizedBox(height: size.height * 0.015),
-                        ...data.wallets.map((w) => _WalletCard(
-                              wallet: w,
-                              onDelete: () => _deleteWallet(context, w),
-                            )),
-                        SizedBox(height: size.height * 0.04),
-                      ],
-                    ),
-            ),
-          ],
-        ),
+      body: Column(
+        children: [
+          _WalletsHeader(
+            topInset: topInset,
+            totalBalance: data.totalNetWorth,
+            walletCount: data.wallets.length,
+            onAddWallet: () => _openAddWallet(context),
+            onBack: () {
+              final nav = MainNav.of(context);
+              if (nav != null) {
+                nav.switchToTab(0);
+              } else if (Navigator.of(context).canPop()) {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          Expanded(
+            child: data.wallets.isEmpty
+                ? _EmptyWallets()
+                : ListView(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: hPad, vertical: size.height * 0.02),
+                    children: [
+                      ...data.wallets.map((w) => _WalletCard(
+                            wallet: w,
+                            onDelete: () => _deleteWallet(context, w),
+                          )),
+                      SizedBox(height: size.height * 0.04),
+                    ],
+                  ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab_wallets',
@@ -112,12 +111,14 @@ class _WalletsHeader extends StatelessWidget {
   final double totalBalance;
   final int walletCount;
   final VoidCallback onAddWallet;
+  final VoidCallback onBack;
 
   const _WalletsHeader(
       {required this.topInset,
       required this.totalBalance,
       required this.walletCount,
-      required this.onAddWallet});
+      required this.onAddWallet,
+      required this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -143,11 +144,21 @@ class _WalletsHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('My Wallets',
-                  style: TextStyle(
-                      color: AhorraColors.textWhite,
-                      fontSize: size.width * 0.06,
-                      fontWeight: FontWeight.w700)),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: onBack,
+                    child: Icon(Icons.arrow_back,
+                        color: AhorraColors.textWhite, size: size.width * 0.065),
+                  ),
+                  SizedBox(width: size.width * 0.025),
+                  Text('My Wallets',
+                      style: TextStyle(
+                          color: AhorraColors.textWhite,
+                          fontSize: size.width * 0.06,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
               Row(
                 children: [
                   GestureDetector(
@@ -175,7 +186,7 @@ class _WalletsHeader extends StatelessWidget {
             padding: EdgeInsets.symmetric(
                 horizontal: size.width * 0.04, vertical: size.height * 0.015),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
+              color: Colors.white.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -240,41 +251,25 @@ class _EmptyWallets extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-              size.width * 0.05, size.height * 0.025, size.width * 0.05, 0),
-          child: Text('Wallets',
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.account_balance_wallet_outlined,
+              size: size.width * 0.28, color: const Color(0xFFCCCCCC)),
+          SizedBox(height: size.height * 0.025),
+          Text('No wallet is set.',
               style: TextStyle(
-                  fontSize: size.width * 0.048,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A1A1A))),
-        ),
-        Expanded(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.account_balance_wallet_outlined,
-                    size: size.width * 0.28, color: const Color(0xFFCCCCCC)),
-                SizedBox(height: size.height * 0.025),
-                Text('No wallet is set.',
-                    style: TextStyle(
-                        color: const Color(0xFF888888),
-                        fontSize: size.width * 0.04,
-                        fontWeight: FontWeight.w500)),
-                SizedBox(height: size.height * 0.006),
-                Text('Set wallet to track your spending.',
-                    style: TextStyle(
-                        color: const Color(0xFFAAAAAA),
-                        fontSize: size.width * 0.033)),
-              ],
-            ),
-          ),
-        ),
-      ],
+                  color: const Color(0xFF888888),
+                  fontSize: size.width * 0.04,
+                  fontWeight: FontWeight.w500)),
+          SizedBox(height: size.height * 0.006),
+          Text('Set wallet to track your spending.',
+              style: TextStyle(
+                  color: const Color(0xFFAAAAAA),
+                  fontSize: size.width * 0.033)),
+        ],
+      ),
     );
   }
 }
@@ -339,7 +334,7 @@ class _WalletCard extends StatelessWidget {
             child: Container(
               padding: EdgeInsets.all(w * 0.02),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(

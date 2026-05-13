@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart' as intl;
-import '../utils/ahorra_colors.dart';
-import '../utils/app_data.dart';
-import '../models/models.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../utils/app_data.dart';
+import '../../models/models.dart';
+import '../../widgets/main_nav.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
 
@@ -144,7 +145,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   List<_DayData> _buildSeries(List<Transaction> txns, DateTime now) {
-    double _getValue(Transaction t) {
+    double getValue(Transaction t) {
       if (_metric == AnalyticsMetric.expense) return t.isExpense ? t.amount : 0;
       if (_metric == AnalyticsMetric.income) return t.isExpense ? 0 : t.amount;
       return t.isExpense ? -t.amount : t.amount;
@@ -155,9 +156,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       final values = List<double>.filled(7, 0.0);
       for (final t in txns) {
         int idx = t.date.weekday - 1;
-        if (idx < 0) idx = 0;
-        if (idx > 6) idx = 6;
-        values[idx] += _getValue(t);
+        if (idx < 0) { idx = 0; }
+        if (idx > 6) { idx = 6; }
+        values[idx] += getValue(t);
       }
       return List.generate(7, (i) => _DayData(labels[i], values[i].abs()));
     }
@@ -166,7 +167,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       final values = List<double>.filled(5, 0.0);
       for (final t in txns) {
         final idx = ((t.date.day - 1) ~/ 7).clamp(0, 4);
-        values[idx] += _getValue(t);
+        values[idx] += getValue(t);
       }
       return List.generate(5, (i) => _DayData('Wk${i + 1}', values[i].abs()));
     }
@@ -174,7 +175,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     final values = List<double>.filled(12, 0.0);
     for (final t in txns) {
       final idx = (t.date.month - 1).clamp(0, 11);
-      values[idx] += _getValue(t);
+      values[idx] += getValue(t);
     }
     return List.generate(
         12,
@@ -253,23 +254,28 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F0),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            _AnalyticsHeader(
-              topInset: topInset,
-              period: _period,
-              metric: _metric,
-              netSavings: netSavings,
-              dailyAverage: dailyAvg,
-              totalIncome: totalIncome,
-              totalExpense: totalExpense,
-              expenseDeltaPct: pctVsPrev,
-              onPeriodChanged: _onPeriodChanged,
-              onMetricChanged: _onMetricChanged,
-            ),
+      body: Column(
+        children: [
+          _AnalyticsHeader(
+            topInset: topInset,
+            period: _period,
+            metric: _metric,
+            netSavings: netSavings,
+            dailyAverage: dailyAvg,
+            totalIncome: totalIncome,
+            totalExpense: totalExpense,
+            expenseDeltaPct: pctVsPrev,
+            onPeriodChanged: _onPeriodChanged,
+            onMetricChanged: _onMetricChanged,
+            onBack: () {
+              final nav = MainNav.of(context);
+              if (nav != null) {
+                nav.switchToTab(0);
+              } else if (Navigator.of(context).canPop()) {
+                Navigator.pop(context);
+              }
+            },
+          ),
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(
@@ -297,7 +303,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.06),
+                                color: Colors.black.withValues(alpha: 0.06),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -414,7 +420,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -443,6 +448,7 @@ class _AnalyticsHeader extends StatelessWidget {
   final double expenseDeltaPct;
   final ValueChanged<AnalyticsPeriod> onPeriodChanged;
   final ValueChanged<AnalyticsMetric> onMetricChanged;
+  final VoidCallback onBack;
 
   const _AnalyticsHeader({
     required this.topInset,
@@ -455,6 +461,7 @@ class _AnalyticsHeader extends StatelessWidget {
     required this.expenseDeltaPct,
     required this.onPeriodChanged,
     required this.onMetricChanged,
+    required this.onBack,
   });
 
   @override
@@ -487,14 +494,24 @@ class _AnalyticsHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Analytics',
-                style: TextStyle(
-                  color: AhorraColors.textWhite,
-                  fontSize: size.width * 0.068,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1,
-                ),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: onBack,
+                    child: Icon(Icons.arrow_back,
+                        color: AhorraColors.textWhite, size: size.width * 0.065),
+                  ),
+                  SizedBox(width: size.width * 0.025),
+                  Text(
+                    'Analytics',
+                    style: TextStyle(
+                      color: AhorraColors.textWhite,
+                      fontSize: size.width * 0.068,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                ],
               ),
               Row(
                 children: [
@@ -567,7 +584,7 @@ class _AnimatedTabGroup extends StatelessWidget {
         Container(
           height: size.width * 0.11,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
+            color: Colors.white.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -594,7 +611,7 @@ class _AnimatedTabGroup extends StatelessWidget {
         Container(
           height: size.width * 0.11,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
+            color: Colors.white.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -879,7 +896,7 @@ class _PeriodTab extends StatelessWidget {
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -931,7 +948,7 @@ class _MetricTab extends StatelessWidget {
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -983,10 +1000,10 @@ class _StatCard extends StatelessWidget {
         vertical: w * 0.035,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
+        color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Colors.white.withOpacity(0.15),
+          color: Colors.white.withValues(alpha: 0.15),
           width: 1,
         ),
       ),
@@ -1197,7 +1214,7 @@ class _HorizontalBarChart extends StatelessWidget {
                           boxShadow: [
                             BoxShadow(
                               color: _barColors[i % _barColors.length]
-                                  .withOpacity(0.3),
+                                  .withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -1283,7 +1300,7 @@ class _DonutChart extends StatelessWidget {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: s.color.withOpacity(0.4),
+                              color: s.color.withValues(alpha: 0.4),
                               blurRadius: 4,
                               offset: const Offset(0, 1),
                             ),
@@ -1344,7 +1361,7 @@ class _DonutPainter extends CustomPainter {
         ..style = PaintingStyle.fill;
 
       final shadowPaint = Paint()
-        ..color = s.color.withOpacity(0.2)
+        ..color = s.color.withValues(alpha: 0.2)
         ..style = PaintingStyle.fill;
 
       final path = Path()
@@ -1414,7 +1431,7 @@ class _LinePainter extends CustomPainter {
 
     final double maxVal =
         data.map((d) => d.value).reduce((a, b) => a > b ? a : b);
-    final double minVal = 0.0;
+    const double minVal = 0.0;
     final double valRange = maxVal - minVal;
 
     // Grid lines with better styling
@@ -1459,14 +1476,14 @@ class _LinePainter extends CustomPainter {
 
     // Fill area with gradient
     final fillPath = Path()..moveTo(points.first.dx, padTop + chartH);
-    for (final p in points) fillPath.lineTo(p.dx, p.dy);
+    for (final p in points) { fillPath.lineTo(p.dx, p.dy); }
     fillPath.lineTo(points.last.dx, padTop + chartH);
     fillPath.close();
 
     canvas.drawPath(
       fillPath,
       Paint()
-        ..color = AhorraColors.teal.withOpacity(0.08)
+        ..color = AhorraColors.teal.withValues(alpha: 0.08)
         ..style = PaintingStyle.fill,
     );
 
@@ -1479,8 +1496,9 @@ class _LinePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final linePath = Path()..moveTo(points.first.dx, points.first.dy);
-    for (int i = 1; i < points.length; i++)
+    for (int i = 1; i < points.length; i++) {
       linePath.lineTo(points[i].dx, points[i].dy);
+    }
 
     canvas.drawPath(linePath, linePaint);
 
@@ -1490,7 +1508,7 @@ class _LinePainter extends CustomPainter {
         p,
         3.5,
         Paint()
-          ..color = AhorraColors.teal.withOpacity(0.25)
+          ..color = AhorraColors.teal.withValues(alpha: 0.25)
           ..style = PaintingStyle.fill,
       );
       canvas.drawCircle(

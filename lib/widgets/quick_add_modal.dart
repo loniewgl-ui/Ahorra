@@ -2,25 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/ahorra_colors.dart';
+import '../utils/categories.dart';
 import 'ahorra_widgets.dart';
 import '../utils/app_data.dart';
 import '../models/models.dart';
-
-const List<String> kCategories = [
-  'Food & Dining',
-  'Transportation',
-  'Shopping',
-  'Entertainment',
-  'Healthcare',
-  'Utilities',
-  'Rent / Housing',
-  'Education',
-  'Travel',
-  'Salary',
-  'Freelance',
-  'Investment Return',
-  'Other',
-];
 
 class QuickAddModal extends StatefulWidget {
   final bool startAsExpense;
@@ -340,7 +325,7 @@ class _DropdownField extends StatelessWidget {
                           horizontal: w * 0.04, vertical: w * 0.038),
                       decoration: BoxDecoration(
                         color: selected == item
-                            ? Colors.white.withOpacity(0.08)
+                            ? Colors.white.withValues(alpha: 0.08)
                             : Colors.transparent,
                         border: const Border(
                           top: BorderSide(color: Color(0x14FFFFFF), width: 1),

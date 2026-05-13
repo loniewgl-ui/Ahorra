@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../utils/ahorra_colors.dart';
-import '../utils/app_data.dart';
-import '../models/models.dart';
-import '../widgets/quick_add_modal.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../utils/app_data.dart';
+import '../../models/models.dart';
+import '../../widgets/main_nav.dart';
+import '../../widgets/quick_add_modal.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
 
@@ -43,12 +44,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     for (final t in txns) {
       final d = DateTime(t.date.year, t.date.month, t.date.day);
       String label;
-      if (d == today)
+      if (d == today) {
         label = 'Today';
-      else if (d == yesterday)
+      } else if (d == yesterday) {
         label = 'Yesterday';
-      else
+      } else {
         label = DateFormat('MMM d, yyyy').format(t.date);
+      }
       map.putIfAbsent(label, () => []).add(t);
     }
     return map;
@@ -72,18 +74,23 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F0),
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            _TransactionsHeader(
-              topInset: topInset,
-              totalIncome: totalIncome,
-              totalExpense: totalExpense,
-              filter: _filter,
-              onFilterChanged: (f) => setState(() => _filter = f),
-            ),
+      body: Column(
+        children: [
+          _TransactionsHeader(
+            topInset: topInset,
+            totalIncome: totalIncome,
+            totalExpense: totalExpense,
+            filter: _filter,
+            onFilterChanged: (f) => setState(() => _filter = f),
+            onBack: () {
+              final nav = MainNav.of(context);
+              if (nav != null) {
+                nav.switchToTab(0);
+              } else if (Navigator.of(context).canPop()) {
+                Navigator.pop(context);
+              }
+            },
+          ),
             Expanded(
               child: filtered.isEmpty
                   ? _EmptyState()
@@ -100,7 +107,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
             ),
           ],
-        ),
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab_transactions',
@@ -119,6 +125,7 @@ class _TransactionsHeader extends StatelessWidget {
   final double totalExpense;
   final String filter;
   final ValueChanged<String> onFilterChanged;
+  final VoidCallback onBack;
 
   const _TransactionsHeader({
     required this.topInset,
@@ -126,6 +133,7 @@ class _TransactionsHeader extends StatelessWidget {
     required this.totalExpense,
     required this.filter,
     required this.onFilterChanged,
+    required this.onBack,
   });
 
   @override
@@ -152,11 +160,21 @@ class _TransactionsHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Transactions',
-                  style: TextStyle(
-                      color: AhorraColors.textWhite,
-                      fontSize: size.width * 0.06,
-                      fontWeight: FontWeight.w700)),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: onBack,
+                    child: Icon(Icons.arrow_back,
+                        color: AhorraColors.textWhite, size: size.width * 0.065),
+                  ),
+                  SizedBox(width: size.width * 0.025),
+                  Text('Transactions',
+                      style: TextStyle(
+                          color: AhorraColors.textWhite,
+                          fontSize: size.width * 0.06,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
               Row(
                 children: [
                   GestureDetector(
@@ -184,7 +202,7 @@ class _TransactionsHeader extends StatelessWidget {
             padding: EdgeInsets.symmetric(
                 horizontal: size.width * 0.04, vertical: size.height * 0.015),
             decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16)),
             child: Row(
               children: [
@@ -249,7 +267,7 @@ class _TransactionsHeader extends StatelessWidget {
           Container(
             height: size.width * 0.105,
             decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10)),
             child: Row(
               children: ['All', 'Income', 'Expense'].map((f) {

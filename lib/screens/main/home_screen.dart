@@ -2,10 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../utils/ahorra_colors.dart';
-import '../utils/app_data.dart';
-import '../models/models.dart';
-import '../widgets/quick_add_modal.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../utils/app_data.dart';
+import '../../models/models.dart';
+import '../../widgets/quick_add_modal.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
 import 'wallets_screen.dart'; // ← for direct navigation
@@ -381,10 +381,8 @@ class _MonthlyBudgetSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double w = MediaQuery.of(context).size.width;
-    final monthlyBudgets =
-        data.budgets.where((b) => b.period == BudgetPeriod.monthly).toList();
-    final double totalLimit = monthlyBudgets.fold(0.0, (s, b) => s + b.limit);
-    final double totalSpent = data.thisMonthExpense;
+    final double totalLimit = data.currentMonthBudgetTotal;
+    final double totalSpent = data.currentMonthBudgetSpent;
     final double pct =
         totalLimit > 0 ? (totalSpent / totalLimit).clamp(0.0, 1.0) : 0.0;
     final bool overBudget = totalSpent > totalLimit && totalLimit > 0;

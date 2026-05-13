@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
-import '../utils/ahorra_colors.dart';
-import '../utils/app_data.dart';
-import 'terms_screen.dart';
-import 'signup_screen.dart';
-import 'login_screen.dart';
-import '../widgets/main_nav.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../utils/app_data.dart';
+import '../setup/terms_screen.dart';
+import '../setup/pin_setup_screen.dart';
+import '../setup/pin_entry_screen.dart';
+import '../auth/signup_screen.dart';
+import '../auth/login_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -68,11 +70,44 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  void _navigateToMain() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainNav()),
-      (route) => false,
-    );
+  Future<void> _navigateToMain() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const PinSetupScreen()),
+        (route) => false,
+      );
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final localPin = prefs.getString('pin_$uid');
+    if (localPin != null) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const PinEntryScreen()),
+        (route) => false,
+      );
+      return;
+    }
+    String? firebasePin;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      firebasePin = doc.data()?['pinHash'] as String?;
+    } catch (_) {}
+    if (firebasePin != null) {
+      await prefs.setString('pin_$uid', firebasePin);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const PinEntryScreen()),
+        (route) => false,
+      );
+    } else {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const PinSetupScreen()),
+        (route) => false,
+      );
+    }
   }
 
   void _showError(String message) {
@@ -193,7 +228,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         width: size.width * 0.2,
                         height: size.width * 0.2,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
+                          color: Colors.white.withValues(alpha: 0.12),
                           borderRadius:
                               BorderRadius.circular(size.width * 0.05),
                         ),
@@ -211,7 +246,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       Text(
                         'WELCOME TO',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.55),
+                          color: Colors.white.withValues(alpha: 0.55),
                           fontSize: size.width * 0.03,
                           letterSpacing: 3,
                           fontWeight: FontWeight.w500,
@@ -236,7 +271,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         'Track expenses, manage wallets,\nand take control of your finances.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.5),
+                          color: Colors.white.withValues(alpha: 0.5),
                           fontSize: size.width * 0.034,
                           height: 1.65,
                         ),
@@ -275,9 +310,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       // Sign In button
                       _WelcomeButton(
                         label: 'Sign In',
-                        backgroundColor: Colors.white.withOpacity(0.12),
+                        backgroundColor: Colors.white.withValues(alpha: 0.12),
                         textColor: Colors.white,
-                        borderColor: Colors.white.withOpacity(0.2),
+                        borderColor: Colors.white.withValues(alpha: 0.2),
                         onTap: _navigateToLogin,
                       ),
                       SizedBox(height: size.height * 0.03),
@@ -287,7 +322,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         children: [
                           Expanded(
                             child: Divider(
-                                color: Colors.white.withOpacity(0.15),
+                                color: Colors.white.withValues(alpha: 0.15),
                                 thickness: 0.5),
                           ),
                           Padding(
@@ -295,14 +330,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             child: Text(
                               'or continue with',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.4),
+                                color: Colors.white.withValues(alpha: 0.4),
                                 fontSize: size.width * 0.03,
                               ),
                             ),
                           ),
                           Expanded(
                             child: Divider(
-                                color: Colors.white.withOpacity(0.15),
+                                color: Colors.white.withValues(alpha: 0.15),
                                 thickness: 0.5),
                           ),
                         ],
@@ -336,7 +371,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         'By continuing, you agree to our Terms of Service\nand Privacy Policy.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white.withValues(alpha: 0.3),
                           fontSize: size.width * 0.027,
                           height: 1.6,
                         ),
@@ -375,19 +410,19 @@ class _FeaturePill extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: w * 0.035, vertical: w * 0.02),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white.withOpacity(0.7), size: w * 0.038),
+          Icon(icon, color: Colors.white.withValues(alpha: 0.7), size: w * 0.038),
           SizedBox(width: w * 0.015),
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               fontSize: w * 0.03,
               fontWeight: FontWeight.w500,
             ),

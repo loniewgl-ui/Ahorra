@@ -1,8 +1,8 @@
 // lib/data_debug_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../utils/app_data.dart';
-import '../utils/test_data_generator.dart'; // uses the generator you already have
+import '../../utils/app_data.dart';
+import '../../utils/test_data_generator.dart'; // uses the generator you already have
 
 class DataDebugScreen extends StatelessWidget {
   const DataDebugScreen({super.key});

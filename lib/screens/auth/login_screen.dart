@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart'; // needed for TapGestureRecognizer
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
-import '../utils/ahorra_colors.dart';
-import '../utils/app_data.dart';
-import '../widgets/ahorra_widgets.dart';
-import 'signup_screen.dart';
-import '../widgets/main_nav.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../utils/app_data.dart';
+import '../../widgets/ahorra_widgets.dart';
+import '../auth/signup_screen.dart';
+import '../setup/pin_setup_screen.dart';
+import '../setup/pin_entry_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -61,10 +63,36 @@ class _LoginScreenState extends State<LoginScreen> {
       final appData = context.read<AppData>();
       await appData.load();
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainNav()),
-        (route) => false,
-      );
+      final uid = userCredential.user!.uid;
+      final prefs = await SharedPreferences.getInstance();
+      final localPin = prefs.getString('pin_$uid');
+      if (localPin != null) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const PinEntryScreen()),
+          (route) => false,
+        );
+      } else {
+        String? firebasePin;
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .get();
+          firebasePin = doc.data()?['pinHash'] as String?;
+        } catch (_) {}
+        if (firebasePin != null) {
+          await prefs.setString('pin_$uid', firebasePin);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const PinEntryScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const PinSetupScreen()),
+            (route) => false,
+          );
+        }
+      }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       _showError(e.message ?? 'Unable to sign in.');

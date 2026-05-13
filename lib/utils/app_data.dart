@@ -7,6 +7,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' as fs;
 import '../models/models.dart';
 import 'notification_service.dart';
+import '../services/connectivity_service.dart';
+import '../services/offline_storage_service.dart';
+import '../services/sync_service.dart';
 
 class AppData extends ChangeNotifier {
   List<Wallet> _wallets = [];
@@ -53,21 +56,29 @@ class AppData extends ChangeNotifier {
   }
 
   double spentForBudget(Budget b) {
-    final now = DateTime.now();
+    final end = b.periodEnd;
     return _transactions.where((t) {
       if (!t.isExpense) return false;
-      if (t.category.trim().toLowerCase() != b.category.trim().toLowerCase())
+      if (t.category.trim().toLowerCase() != b.category.trim().toLowerCase()) {
         return false;
-      if (b.period == BudgetPeriod.monthly) {
-        return t.date.year == now.year && t.date.month == now.month;
-      } else {
-        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        final weekStart =
-            DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
-        return !t.date.isBefore(weekStart);
       }
+      return !t.date.isBefore(b.periodStart) && t.date.isBefore(end);
     }).fold(0.0, (s, t) => s + t.amount);
   }
+
+  List<Budget> budgetsForMonth(int month, int year) =>
+      _budgets.where((b) => b.month == month && b.year == year).toList();
+
+  List<Budget> get currentMonthBudgets => budgetsForMonth(
+        DateTime.now().month,
+        DateTime.now().year,
+      );
+
+  double get currentMonthBudgetTotal =>
+      currentMonthBudgets.fold(0.0, (s, b) => s + b.limit);
+
+  double get currentMonthBudgetSpent =>
+      currentMonthBudgets.fold(0.0, (s, b) => s + spentForBudget(b));
 
   // ── Load / Save ───────────────────────────────────────────────────────────
   Future<void> load() async {
@@ -76,15 +87,50 @@ class AppData extends ChangeNotifier {
     _transactions = [];
     _budgets = [];
 
+    await OfflineStorageService.initializeDatabase();
+    await _loadFromOffline();
+
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await _loadFromFirestore(user.uid);
-    } else {
-      print('ℹ️ No user logged in, data not loaded from Firestore');
+      await SyncService.initializeSync();
+      if (await ConnectivityService.isConnected) {
+        await _loadFromFirestore(user.uid);
+      }
     }
 
     _loaded = true;
     notifyListeners();
+  }
+
+  Future<void> _loadFromOffline() async {
+    try {
+      // Load wallets from offline storage
+      final localWallets = await OfflineStorageService.getLocalWallets();
+      if (localWallets.isNotEmpty) {
+        _wallets = localWallets;
+      }
+
+      // Load transactions from offline storage
+      final localTransactionsData =
+          await OfflineStorageService.getLocalTransactions();
+      if (localTransactionsData.isNotEmpty) {
+        _transactions = localTransactionsData
+            .map((data) => Transaction.fromJson(data))
+            .toList();
+      }
+
+      // Load budgets from offline storage
+      final localBudgetsData = await OfflineStorageService.getLocalBudgets();
+      if (localBudgetsData.isNotEmpty) {
+        _budgets = localBudgetsData
+            .map((data) => Budget.fromJson(Map<String, dynamic>.from(data)))
+            .toList();
+      }
+
+      debugPrint('✅ Data loaded from offline storage');
+    } catch (e) {
+      debugPrint('❌ Error loading from offline storage: $e');
+    }
   }
 
   Future<bool> _loadFromFirestore(String uid) async {
@@ -123,7 +169,7 @@ class AppData extends ChangeNotifier {
 
       return true;
     } catch (e) {
-      print('❌ Error loading data from Firestore: $e');
+      debugPrint('❌ Error loading data from Firestore: $e');
       return false;
     }
   }
@@ -133,12 +179,38 @@ class AppData extends ChangeNotifier {
     _saveDebounce = Timer(const Duration(milliseconds: 800), () async {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        print('📦 Starting save for user: ${user.uid}');
-        await _saveToFirestore(user.uid);
+        debugPrint('📦 Starting save for user: ${user.uid}');
+
+        // Save to offline storage first
+        await _saveToOffline();
+
+        // Then try to sync to Firestore if online
+        if (await ConnectivityService.isConnected) {
+          await _saveToFirestore(user.uid);
+        } else {
+          debugPrint('📴 Offline - data saved locally, will sync when online');
+        }
       } else {
-        print('⚠️ Save skipped - no authenticated user');
+        debugPrint('⚠️ Save skipped - no authenticated user');
       }
     });
+  }
+
+  Future<void> _saveToOffline() async {
+    try {
+      // Save wallets to offline storage
+      await OfflineStorageService.saveLocalWallets(_wallets);
+
+      // Save transactions to offline storage
+      await OfflineStorageService.saveLocalTransactions(_transactions);
+
+      // Save budgets to offline storage
+      await OfflineStorageService.saveLocalBudgets(_budgets);
+
+      debugPrint('✅ Data saved to offline storage');
+    } catch (e) {
+      debugPrint('❌ Error saving to offline storage: $e');
+    }
   }
 
   Future<void> _saveToFirestore(String uid) async {
@@ -149,9 +221,9 @@ class AppData extends ChangeNotifier {
         'budgets': _budgets.map((b) => b.toJson()).toList(),
         'lastDataUpdate': fs.FieldValue.serverTimestamp(),
       }, fs.SetOptions(merge: true));
-      print('✅ Firestore data saved successfully');
+      debugPrint('✅ Firestore data saved successfully');
     } catch (e) {
-      print('❌ Firestore save FAILED: $e');
+      debugPrint('❌ Firestore save FAILED: $e');
     }
   }
 
@@ -174,7 +246,10 @@ class AppData extends ChangeNotifier {
     final oldNetWorth = totalNetWorth;
     final idx = _wallets.indexWhere((w) => w.id == txn.walletId);
     if (idx != -1) {
-      _wallets[idx].balance += txn.isExpense ? -txn.amount : txn.amount;
+      _wallets[idx] = _wallets[idx].copyWith(
+        balance: _wallets[idx].balance +
+            (txn.isExpense ? -txn.amount : txn.amount),
+      );
     }
     _transactions.insert(0, txn);
     notifyListeners();
@@ -182,7 +257,7 @@ class AppData extends ChangeNotifier {
 
     // ---- UNIVERSAL TRANSACTION NOTIFICATION ----
     final type = txn.isExpense ? 'Expense' : 'Income';
-    final body = '${type}: ₱${txn.amount.toStringAsFixed(2)} – ${txn.category}';
+    final body = '$type: ₱${txn.amount.toStringAsFixed(2)} – $txn.category';
     NotificationService.show(title: 'Transaction Added', body: body);
     _saveNotification('Transaction Added', body, false);
 
@@ -200,7 +275,7 @@ class AppData extends ChangeNotifier {
 
     for (final budget in _budgets) {
       if (budget.category.trim().toLowerCase() !=
-          txn.category.trim().toLowerCase()) continue;
+          txn.category.trim().toLowerCase()) { continue; }
       final spent = spentForBudget(budget);
       if (spent > budget.limit && (spent - txn.amount) <= budget.limit) {
         final body =
@@ -245,13 +320,16 @@ class AppData extends ChangeNotifier {
       final txn = _transactions.firstWhere((t) => t.id == txnId);
       final idx = _wallets.indexWhere((w) => w.id == txn.walletId);
       if (idx != -1) {
-        _wallets[idx].balance += txn.isExpense ? txn.amount : -txn.amount;
+        _wallets[idx] = _wallets[idx].copyWith(
+          balance: _wallets[idx].balance +
+              (txn.isExpense ? txn.amount : -txn.amount),
+        );
       }
       _transactions.removeWhere((t) => t.id == txnId);
       notifyListeners();
       _scheduleSave();
     } catch (e) {
-      print('❌ Transaction not found: $e');
+      debugPrint('❌ Transaction not found: $e');
     }
   }
 
@@ -278,9 +356,9 @@ class AppData extends ChangeNotifier {
             .collection('users')
             .doc(user.uid)
             .delete();
-        print('✅ Firestore data deleted');
+        debugPrint('✅ Firestore data deleted');
       } catch (e) {
-        print('❌ Failed to delete Firestore data: $e');
+        debugPrint('❌ Failed to delete Firestore data: $e');
         rethrow;
       }
     }

@@ -3,15 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'utils/app_data.dart';
 import 'utils/auth_helper.dart';
 import 'utils/notification_service.dart';
-import 'screens/splash_screen.dart';
-import 'screens/welcome_screen.dart';
-import 'screens/pin_setup_screen.dart';
-import 'screens/pin_entry_screen.dart';
+import 'screens/setup/splash_screen.dart';
+import 'screens/auth/welcome_screen.dart';
+import 'screens/setup/pin_setup_screen.dart';
+import 'screens/setup/pin_entry_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,16 +49,61 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  String? _lastUid;
+  String? _lastFirebaseUid;
+  String? _localUid;
+  bool? _hasLocalPin;
+  bool _checkingLocal = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLocalAuth();
+  }
+
+  Future<void> _checkLocalAuth() async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = prefs.getString('lastUid');
+    if (uid != null && uid.isNotEmpty) {
+      final pin = prefs.getString('pin_$uid');
+      if (pin != null && pin.isNotEmpty) {
+        _localUid = uid;
+        _hasLocalPin = true;
+      }
+    }
+    _checkingLocal = false;
+    if (mounted) setState(() {});
+  }
 
   Future<bool> _hasPinSet(String uid) async {
     final prefs = await SharedPreferences.getInstance();
-    final pin = prefs.getString('pin_$uid');
-    return pin != null;
+    final localPin = prefs.getString('pin_$uid');
+    if (localPin != null) return true;
+
+    // Check Firestore for PIN hash (new device, same account)
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      final pinHash = doc.data()?['pinHash'] as String?;
+      if (pinHash != null && pinHash.isNotEmpty) {
+        await prefs.setString('pin_$uid', pinHash);
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingLocal) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0D2E2B),
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
@@ -70,19 +116,28 @@ class _AuthGateState extends State<AuthGate> {
 
         final user = snapshot.data;
 
-        if (user != null && user.uid != _lastUid) {
-          _lastUid = user.uid;
+        if (user != null && user.uid != _lastFirebaseUid) {
+          _lastFirebaseUid = user.uid;
+          _localUid = null;
+          _hasLocalPin = null;
+          SharedPreferences.getInstance().then((prefs) {
+            prefs.setString('lastUid', user.uid);
+          });
           WidgetsBinding.instance.addPostFrameCallback((_) {
             context.read<AppData>().load();
           });
         }
 
+        // Fallback: Firebase user is null but we have a local PIN → offline access
+        if (user == null && _localUid != null && _hasLocalPin == true) {
+          return PinEntryScreen(uid: _localUid);
+        }
+
         if (user == null) {
-          _lastUid = null;
+          _lastFirebaseUid = null;
           return const WelcomeScreen();
         }
 
-        // This FutureBuilder forces the PIN screen EVERY time the user is authenticated
         return FutureBuilder<bool>(
           future: _hasPinSet(user.uid),
           builder: (_, pinSnapshot) {
@@ -95,9 +150,9 @@ class _AuthGateState extends State<AuthGate> {
             }
             final hasPin = pinSnapshot.data ?? false;
             if (!hasPin) {
-              return const PinSetupScreen(); // first time → create PIN
+              return const PinSetupScreen();
             } else {
-              return const PinEntryScreen(); // every other time → enter PIN
+              return const PinEntryScreen();
             }
           },
         );

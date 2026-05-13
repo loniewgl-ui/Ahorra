@@ -4,13 +4,15 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../utils/app_data.dart'; // needed for Provider
-import '../widgets/main_nav.dart';
-import 'welcome_screen.dart'; // to navigate after reset
+import '../../utils/app_data.dart'; // needed for Provider
+import '../../widgets/main_nav.dart';
+import '../auth/welcome_screen.dart'; // to navigate after reset
 
 class PinEntryScreen extends StatefulWidget {
-  const PinEntryScreen({super.key});
+  final String? uid;
+  const PinEntryScreen({super.key, this.uid});
 
   @override
   State<PinEntryScreen> createState() => _PinEntryScreenState();
@@ -21,6 +23,8 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
   bool _obscure = true;
   bool _isLoading = false;
   int _attempts = 0;
+
+  String get _uid => widget.uid ?? FirebaseAuth.instance.currentUser?.uid ?? '';
 
   String _hashPin(String pin) {
     final bytes = utf8.encode(pin);
@@ -34,7 +38,15 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final uid = _uid;
+      if (uid.isEmpty) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          (route) => false,
+        );
+        return;
+      }
       final storedHash = prefs.getString('pin_$uid');
       if (storedHash == null) {
         if (!mounted) return;
@@ -48,6 +60,9 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
       final enteredHash = _hashPin(pin);
       if (enteredHash == storedHash) {
         if (!mounted) return;
+        final appData = context.read<AppData>();
+        await appData.load();
+        if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const MainNav()),
           (route) => false,
@@ -55,13 +70,17 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
       } else {
         _attempts++;
         if (_attempts >= 3) {
-          await FirebaseAuth.instance.signOut();
+          final prefs2 = await SharedPreferences.getInstance();
+          await prefs2.remove('lastUid');
+          await prefs2.remove('pin_$uid');
+          try { await FirebaseAuth.instance.signOut(); } catch (_) {}
           if (!mounted) return;
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const WelcomeScreen()),
             (route) => false,
           );
         } else {
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Wrong PIN. ${3 - _attempts} attempts left.'),
@@ -71,6 +90,7 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
         }
       }
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error verifying PIN')),
       );
@@ -79,7 +99,6 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
     }
   }
 
-  // ─── Secure reset: log out + clear PIN ──────────────────────────────────
   Future<void> _forgotPin() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -104,20 +123,21 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
 
     if (confirmed != true) return;
 
-    // 1. Remove the PIN
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final uid = _uid;
+    final appData = context.read<AppData>();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('pin_$uid');
+    await prefs.remove('lastUid');
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .update({'pinHash': FieldValue.delete()});
+    } catch (_) {}
+    await appData.clearAll();
+    try { await FirebaseAuth.instance.signOut(); } catch (_) {}
 
-    // 2. Clear app data and sign out (same as manual sign‑out)
-    final appData = context.read<AppData>(); // AppData is provided above
-    await appData.clearAll(); // clears Firestore cache, etc.
-
-    // 3. Sign out from Firebase (clearAll() already signs out, but double‑check)
-    await FirebaseAuth.instance.signOut();
-
-    // 4. Navigate to WelcomeScreen (and remove everything else from the stack)
-    if (!mounted) return;
+    if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const WelcomeScreen()),
       (route) => false,

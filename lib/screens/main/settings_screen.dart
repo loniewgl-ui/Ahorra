@@ -1,7 +1,10 @@
 // lib/screens/settings_screen.dart
+import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,12 +13,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart'; // ⬅️ ADDED for sharing
-import '../utils/ahorra_colors.dart';
-import '../utils/app_data.dart';
-import '../utils/data_export_helper.dart';
-import 'welcome_screen.dart';
-import 'data_debug_screen.dart';
-import 'terms_screen.dart';
+import '../../utils/ahorra_colors.dart';
+import '../../utils/app_data.dart';
+import '../../utils/data_export_helper.dart';
+import '../auth/welcome_screen.dart';
+import '../setup/data_debug_screen.dart';
+import '../setup/terms_screen.dart';
 
 Future<String> _copyImageFile(Map<String, String> args) async {
   final source = File(args['sourcePath']!);
@@ -150,13 +153,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            ..._currencies.map(
-              (c) => ListTile(
-                title: Text(c),
-                trailing: _selectedCurrency == c
-                    ? const Icon(Icons.check, color: AhorraColors.teal)
-                    : null,
-                onTap: () => _changeCurrency(c),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: _currencies.map(
+                  (c) => ListTile(
+                    title: Text(c),
+                    trailing: _selectedCurrency == c
+                        ? const Icon(Icons.check, color: AhorraColors.teal)
+                        : null,
+                    onTap: () => _changeCurrency(c),
+                  ),
+                ).toList(),
               ),
             ),
           ],
@@ -284,7 +292,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'displayName': _displayNameController.text.trim(),
               'updatedAt': FieldValue.serverTimestamp(),
             });
-        if (!mounted) return;
+        if (!context.mounted) return;
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully')),
@@ -292,7 +300,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {});
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
@@ -340,17 +348,209 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _changePassword() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final isGoogle = user.providerData
+        .any((info) => info.providerId == 'google.com');
+
+    if (isGoogle) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Change Password'),
+          content: const Text(
+            'You signed in with Google. To change your password, please go to your Google Account settings.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final currentPwCtrl = TextEditingController();
+    final newPwCtrl = TextEditingController();
+    final confirmPwCtrl = TextEditingController();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Change Password'),
-        content: const Text(
-          'You signed in with Google. To change your password, please go to your Google Account settings.',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: currentPwCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Current password',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newPwCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'New password',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmPwCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Confirm new password',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final current = currentPwCtrl.text;
+              final newPw = newPwCtrl.text;
+              final confirm = confirmPwCtrl.text;
+              if (newPw.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Password must be at least 6 characters')),
+                );
+                return;
+              }
+              if (newPw != confirm) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Passwords do not match')),
+                );
+                return;
+              }
+              try {
+                final credential = EmailAuthProvider.credential(
+                  email: user.email!,
+                  password: current,
+                );
+                await user.reauthenticateWithCredential(credential);
+                await user.updatePassword(newPw);
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Password changed successfully')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: ${e.toString()}')),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _changePin() {
+    final currentPinCtrl = TextEditingController();
+    final newPinCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Change PIN'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: currentPinCtrl,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Current PIN',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: newPinCtrl,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'New PIN (4-6 digits)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final current = currentPinCtrl.text.trim();
+              final newPin = newPinCtrl.text.trim();
+              if (newPin.length < 4 || newPin.length > 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('PIN must be 4-6 digits')),
+                );
+                return;
+              }
+              final uid = FirebaseAuth.instance.currentUser?.uid;
+              if (uid == null) return;
+              final prefs = await SharedPreferences.getInstance();
+              final storedHash = prefs.getString('pin_$uid');
+              final currentHash = sha256.convert(utf8.encode(current)).toString();
+              if (storedHash != null && currentHash != storedHash) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Current PIN is incorrect')),
+                );
+                return;
+              }
+              final newHash = sha256.convert(utf8.encode(newPin)).toString();
+              await prefs.setString('pin_$uid', newHash);
+              try {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .set({'pinHash': newHash}, SetOptions(merge: true));
+              } catch (_) {}
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('PIN changed successfully')),
+              );
+            },
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -359,9 +559,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ─── Share file helper ──────────────────────────────────────────────────
   void _shareFile(String filePath, String fileName) {
-    Share.shareXFiles([
-      XFile(filePath),
-    ], text: 'Here is your Ahorra export file: $fileName');
+    SharePlus.instance.share(
+      ShareParams(files: [XFile(filePath)], text: 'Here is your Ahorra export file: $fileName'),
+    );
   }
 
   // ─── EXPORT DATA – saves to app-private folder + share button ─────────────
@@ -495,26 +695,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
+    // ignore: use_build_context_synchronously
+    final appData = context.read<AppData>();
+    // ignore: use_build_context_synchronously
+    final messenger = ScaffoldMessenger.of(context);
+    // ignore: use_build_context_synchronously
+    final navigator = Navigator.of(context);
     setState(() => _isLoading = true);
     try {
-      final appData = context.read<AppData>();
       await appData.deleteUserData();
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('pin_${user.uid}');
       }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!context.mounted) return;
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('All data cleared'),
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.of(context).pop();
+      navigator.pop();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!context.mounted) return;
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red,
@@ -549,7 +754,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true) return;
+    // ignore: use_build_context_synchronously
     final localContext = context;
+    // ignore: use_build_context_synchronously
+    final appData = localContext.read<AppData>();
     setState(() => _isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -561,9 +769,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await user.delete();
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('pin_${user.uid}');
-        final appData = localContext.read<AppData>();
         await appData.clearAll();
-        if (!mounted) return;
+        if (!context.mounted) return;
         Navigator.of(localContext).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const WelcomeScreen()),
           (route) => false,
@@ -614,7 +821,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () async {
               final appData = context.read<AppData>();
               await appData.clearAll();
-              if (!mounted) return;
+              if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const WelcomeScreen()),
                 (route) => false,
@@ -684,10 +891,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Privacy Policy'),
-        content: SingleChildScrollView(
+        content: const SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
                 'Your privacy is important to us.',
                 style: TextStyle(fontWeight: FontWeight.w600),
@@ -786,7 +993,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Container(
                               padding: EdgeInsets.all(size.width * 0.025),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.12),
+                                color: Colors.white.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(
@@ -809,7 +1016,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: size.width * 0.18,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 image: profileImage,
                               ),
                               child: !hasProfileImage
@@ -867,7 +1074,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 vertical: size.height * 0.008,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.12),
+                                color: Colors.white.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
@@ -933,6 +1140,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               subtitle:
                                   'Update your password (Google users: use Google account)',
                               onTap: _changePassword,
+                            ),
+                            _SettingsTile(
+                              icon: Icons.pin_outlined,
+                              title: 'Change PIN',
+                              subtitle: 'Update your security PIN',
+                              onTap: _changePin,
                             ),
                           ],
                         ),
@@ -1138,7 +1351,7 @@ class _SettingsTile extends StatelessWidget {
                 width: w * 0.1,
                 height: w * 0.1,
                 decoration: BoxDecoration(
-                  color: (iconColor ?? AhorraColors.teal).withOpacity(0.1),
+                  color: (iconColor ?? AhorraColors.teal).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -1206,7 +1419,7 @@ class _SwitchSettingsTile extends StatelessWidget {
             width: w * 0.1,
             height: w * 0.1,
             decoration: BoxDecoration(
-              color: AhorraColors.teal.withOpacity(0.1),
+              color: AhorraColors.teal.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: AhorraColors.teal, size: w * 0.05),
@@ -1230,8 +1443,8 @@ class _SwitchSettingsTile extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AhorraColors.teal,
-            activeTrackColor: AhorraColors.teal.withOpacity(0.5),
+            activeThumbColor: AhorraColors.teal,
+            activeTrackColor: AhorraColors.teal.withValues(alpha: 0.5),
           ),
         ],
       ),

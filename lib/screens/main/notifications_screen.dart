@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../utils/ahorra_colors.dart';
+import '../../utils/ahorra_colors.dart';
 import 'transactions_screen.dart'; // ← add this import
 
 class NotificationsScreen extends StatefulWidget {
@@ -95,7 +95,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             itemBuilder: (_, i) {
               final notif = notifications[notifications.length - 1 - i];
               return Card(
-                margin: EdgeInsets.only(bottom: 8),
+                margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
                   leading: Icon(Icons.warning_amber,
                       color: notif['overspent'] == true
